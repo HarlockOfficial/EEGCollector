@@ -13,9 +13,7 @@ import DatasetAugmentation.utils
 import VirtualController
 
 # Note: using (both_)hands as resting state
-x, y, stream_channel_count, _, _ = DatasetAugmentation.utils.load_dataset(PhysionetMI, events=['left_hand', 'right_hand', 'feet', 'hands'], get_verbose_information=True)
-dataset_by_label = DatasetAugmentation.utils.split_dataset_by_label(x, y)
-del x, y
+x, _, stream_channel_count, _, _ = DatasetAugmentation.utils.load_dataset(PhysionetMI, events=['hands'], get_verbose_information=True)
 
 path_to_generators = sys.argv[1]
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -44,7 +42,7 @@ def _on_key_down(generator, key):
 def _on_key_up(key):
     samples = int(0.5 * stream_sample_rate + 1)
     while key == VirtualController.KeyStatus.UP:
-        sample = random.choice(dataset_by_label['hands'])
+        sample = random.choice(x)
         sample = np.expand_dims(sample, axis=0)
         assert sample.shape == (1, stream_channel_count, samples)
         outlet.push_chunk(sample)

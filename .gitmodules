@@ -1,0 +1,3 @@
+[submodule "eego_sdk/eego-sdk-pybind11"]
+	path = eego_sdk/eego-sdk-pybind11
+	url = https://gitlab.com/smeeze/eego-sdk-pybind11.git

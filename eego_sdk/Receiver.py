@@ -6,7 +6,9 @@ import numpy as np
 
 import DatasetAugmentation.utils
 import EEGClassificator.utils
+import EEGCollector.eego_sdk.utils
 import VirtualController
+from EEGCollector.eego_sdk import eeg_mapping
 from EEGCollector.eego_sdk.eego_sdk_pybind11 import eego_sdk
 
 def amplifier_to_id(amplifier):
@@ -132,12 +134,14 @@ def down_sample(data:np.ndarray, rate:int, new_rate:int):
     return data[:, ::int(rate/new_rate)]
 
 
-def filter_channels(sample: np.ndarray, current_channel_list, channel_list = None):
+def filter_channels(sample: np.ndarray, current_channel_list, channel_list:list[str]= None, mapping=None):
     if channel_list is None:
         channel_list = DatasetAugmentation.utils.ALL_EEG_CHANNELS
+    if mapping is None:
+        mapping = eeg_mapping
     assert sample.shape[0] == len(current_channel_list), "channel count mismatch"
     # select only the channels that are in the channel list
-    # TODO fix: for sure next line wont work!
+    channel_list = EEGCollector.eego_sdk.utils.channel_names_to_indices(channel_list, mapping.eeg_to_electrode, mapping.electrode_to_channel)
     return sample[channel_list]
 
 def get_sample() -> Generator[np.ndarray, None, None]:

@@ -1,5 +1,8 @@
+import pathlib
+import pickle
 import sys
 import time
+import datetime
 from typing import Generator
 
 import numpy as np
@@ -61,7 +64,7 @@ def get_stream(amplifier):
         # select right rate, ideally multiple of 128
         # rate = rates[0]
         # NOTE: takes the highest rate that is a multiple of 128
-        rate = reversed(sorted([r for r in rates if r % 128 == 0]))[0]
+        rate = list(sorted([r for r in rates if r % 128 == 0], reverse=True))[0]
         del rates
         del ref_ranges
         del bip_ranges
@@ -80,6 +83,10 @@ def get_stream(amplifier):
 
 def get_data(stream, rate) -> Generator[np.ndarray, None, None]:
     try:
+        t = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
+        save_path = pathlib.Path(f'live_data/{t}/')
+        if not save_path.exists():
+            save_path.mkdir(parents=True, exist_ok=True)
         t0 = time.time()
         interval = 1.0 / rate
         tnext = t0
@@ -108,8 +115,12 @@ def get_data(stream, rate) -> Generator[np.ndarray, None, None]:
                     eeg_sample = data.getSample(c, s)
                     array[c, s] = eeg_sample.value
             assert np.all(array != None), "array has None values"
+            with open(save_path / f'raw_data_{tnext}.pkl', 'wb') as f:
+                pickle.dump(array, f)
             array = DatasetAugmentation.utils.to_mV(array)
             array = DatasetAugmentation.utils.data_filter(array, rate=rate)
+            with open(save_path / f'processed_data_{tnext}.pkl', 'wb') as f:
+                pickle.dump(array, f)
             yield array
     except AssertionError as e:
         print('stream error: {}'.format(e))

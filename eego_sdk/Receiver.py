@@ -14,6 +14,10 @@ import VirtualController
 from EEGCollector.eego_sdk import eeg_mapping
 from EEGCollector.eego_sdk.eego_sdk_pybind11 import eego_sdk
 
+t = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
+save_path = pathlib.Path(f'live_data/{t}/')
+del t
+
 def amplifier_to_id(amplifier):
   return '{}-{:06d}-{}'.format(amplifier.getType(), amplifier.getFirmwareVersion(), amplifier.getSerialNumber())
 def get_amplifier(select_amplifier=None):
@@ -83,10 +87,6 @@ def get_stream(amplifier):
 
 def get_data(stream, rate) -> Generator[np.ndarray, None, None]:
     try:
-        t = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
-        save_path = pathlib.Path(f'live_data/{t}/')
-        if not save_path.exists():
-            save_path.mkdir(parents=True, exist_ok=True)
         t0 = time.time()
         interval = 1.0 / rate
         tnext = t0
@@ -119,7 +119,7 @@ def get_data(stream, rate) -> Generator[np.ndarray, None, None]:
                 pickle.dump(array, f)
             array = DatasetAugmentation.utils.to_mV(array)
             array = DatasetAugmentation.utils.data_filter(array, rate=rate)
-            with open(save_path / f'processed_data_{tnext}.pkl', 'wb') as f:
+            with open(save_path / f'initially_processed_data_{tnext}.pkl', 'wb') as f:
                 pickle.dump(array, f)
             yield array
     except AssertionError as e:
@@ -158,6 +158,7 @@ def filter_channels(sample: np.ndarray, current_channel_list, channel_list:list[
 def get_sample() -> Generator[np.ndarray, None, None]:
     amplifier = get_amplifier(lambda amplifiers: amplifiers[0])
     stream, rate = get_stream(amplifier)
+    print(f'amplifier: {amplifier_to_id(amplifier)}, stream: {stream}, rate: {rate} Hz, channels: {stream.getChannelList()}')
     try:
         all_data_buffer = np.empty((0, stream.getChannelCount()))
         while data := get_data(stream, rate):
@@ -168,6 +169,8 @@ def get_sample() -> Generator[np.ndarray, None, None]:
             sample = select_sample(all_data_buffer, rate, 0.5)
             sample = down_sample(sample, rate, 128)
             sample = filter_channels(sample, stream.getChannelList())
+            with open(save_path / f'final_data_{time.time()}.pkl', 'wb') as f:
+                pickle.dump(sample, f)
             yield sample
     except AssertionError as e:
         print('stream error: {}'.format(e))
@@ -185,6 +188,9 @@ def get_sample() -> Generator[np.ndarray, None, None]:
         return None
 
 def main(path_to_classificator, url_to_websocket_server):
+    if not save_path.exists():
+        save_path.mkdir(parents=True, exist_ok=True)
+
     stream_channel_count = DatasetAugmentation.utils.INPUT_CHANNELS
     stream_sample_rate = DatasetAugmentation.utils.SAMPLE_RATE
     samples = int(0.5 * stream_sample_rate + 1)
@@ -198,8 +204,11 @@ def main(path_to_classificator, url_to_websocket_server):
         sample = np.array([sample])
         assert sample.shape == (1, stream_channel_count, samples)
         classification = classificator.predict(sample)[0]
-        classification = EEGClassificator.utils.from_categorical(classification.item())
-        connection.send(classification)
+        category = EEGClassificator.utils.from_categorical(classification.item())
+        connection.send(category)
+        with open(save_path / f'classification_{time.time()}_{category}.pkl', 'wb') as f:
+            pickle.dump(classification, f)
+        print(f'time:{time.time()}, classification: {category}', flush=True)
 
 
 if __name__ == '__main__':
